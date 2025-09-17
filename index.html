@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Liga de 40 Equipos — Realtime (Firebase)</title>
+  <style>
+    :root { --bg:#0f172a; --card:#111827; --muted:#94a3b8; --text:#e5e7eb; --accent:#22c55e; --danger:#ef4444; --ring:#38bdf8; }
+    *{box-sizing:border-box}
+    body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, "Helvetica Neue", Arial; background:linear-gradient(120deg,#0b1023,#0f172a 30%,#0b132f); color:var(--text); }
+    header{position:sticky;top:0;z-index:5;background:rgba(17,24,39,.8);backdrop-filter:blur(8px);border-bottom:1px solid #1f2937}
+    .wrap{max-width:1100px;margin:0 auto;padding:18px}
+    h1{margin:0;font-size:1.4rem;display:flex;gap:12px;align-items:center}
+    .pill{font-size:.75rem;color:#0f172a;background:#a7f3d0;padding:2px 8px;border-radius:999px;font-weight:700}
+    main{display:grid;grid-template-columns:1.05fr .95fr;gap:18px;padding:18px;max-width:1100px;margin:0 auto}
+    @media (max-width: 980px){ main{grid-template-columns:1fr} }
+    .card{background:var(--card);border:1px solid #1f2937;border-radius:14px;box-shadow:0 6px 22px rgba(0,0,0,.35)}
+    .card h2{margin:0 0 6px 0;font-size:1.05rem}
+    .card .body{padding:16px}
+    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    select, input[type="text"], input[type="password"], input[type="email"]{background:#0b1220;border:1px solid #1f2937;color:var(--text);padding:10px 12px;border-radius:10px;outline:none}
+    select:focus, input:focus{border-color:var(--ring);box-shadow:0 0 0 3px rgba(56,189,248,.15)}
+    button{border:0;background:#334155;color:var(--text);padding:10px 14px;border-radius:10px;cursor:pointer;transition:.15s}
+    button:hover{filter:brightness(1.1)}
+    .primary{background:#16a34a}
+    .ghost{background:transparent;border:1px solid #334155}
+    .danger{background:var(--danger)}
+    .grid{display:grid;gap:10px}
+    .cols-3{grid-template-columns:1fr 1fr 1fr}
+    .cols-2{grid-template-columns:1fr 1fr}
+    .muted{color:var(--muted)}
+    table{width:100%;border-collapse:collapse}
+    thead th{position:sticky;top:0;background:#0b1220;padding:10px;font-weight:700;border-bottom:1px solid #1f2937}
+    tbody td{padding:10px;border-bottom:1px solid #1f2937}
+    tbody tr:hover{background:#0b1220}
+    .right{text-align:right}
+    .center{text-align:center}
+    .tag{font-size:.7rem;background:#0b1220;border:1px solid #1f2937;padding:2px 8px;border-radius:999px}
+    .admin-badge{font-size:.75rem;color:#22c55e;border:1px solid #14532d;background:#052e1a;padding:2px 8px;border-radius:999px}
+    .stack{display:flex;flex-direction:column;gap:10px}
+    .history{max-height:260px;overflow:auto;border-top:1px dashed #1f2937;margin-top:10px;padding-top:10px}
+    .small{font-size:.85rem}
+    .name-btn{background:transparent;border:1px dashed #374151;padding:4px 8px;border-radius:8px;cursor:pointer}
+    .footer{opacity:.7;font-size:.8rem;margin-top:6px}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap row" style="justify-content:space-between">
+      <h1>⚽ Liga de 40 Equipos <span class="pill">Realtime 200 / 0 / 100</span></h1>
+      <div class="row">
+        <span id="adminState" class="tag">Visitante</span>
+        <button id="toggleAdmin" class="ghost">Entrar como admin</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- Panel de partido -->
+    <section class="card">
+      <div class="body">
+        <h2>Registrar resultado</h2>
+        <p class="muted small">Selecciona dos equipos distintos. Solo los <strong>admins autenticados</strong> pueden registrar resultados; todos ven los cambios en tiempo real.</p>
+        <div class="grid cols-2" style="margin-top:10px">
+          <div class="stack">
+            <label class="muted small">Equipo A</label>
+            <select id="teamA"></select>
+          </div>
+          <div class="stack">
+            <label class="muted small">Equipo B</label>
+            <select id="teamB"></select>
+          </div>
+        </div>
+        <div class="row" style="margin-top:12px">
+          <button id="btnAWin" class="primary" title="A gana (A +200 / B +0)" disabled>🏆 Gana A (+200)</button>
+          <button id="btnDraw" class="ghost" title="Empate (A +100 / B +100)" disabled>🤝 Empate (+100/+100)</button>
+          <button id="btnBWin" class="primary" title="B gana (B +200 / A +0)" disabled>🏆 Gana B (+200)</button>
+        </div>
+        <div class="history" id="history"></div>
+      </div>
+    </section>
+
+    <!-- Tabla de posiciones -->
+    <section class="card">
+      <div class="body">
+        <div class="row" style="justify-content:space-between;align-items:center">
+          <h2>Tabla de posiciones</h2>
+          <div class="row">
+            <button id="renameTeams" class="ghost" title="Renombrar equipos">✏️ Nombres</button>
+            <button id="resetBtn" class="danger" title="Borrar puntos e historial">♻️ Reiniciar</button>
+          </div>
+        </div>
+        <table id="table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Equipo</th>
+              <th class="right">Puntos</th>
+              <th class="center">PJ</th>
+              <th class="center">G</th>
+              <th class="center">E</th>
+              <th class="center">P</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+        <div class="footer muted">Regla: Victoria = 200 pts · Empate = 100 pts · Derrota = 0 pts</div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Firebase v10 modules -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+    import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+
+    // TODO: Rellena con tu configuración de Firebase
+    const firebaseConfig = {
+      apiKey: "TU_API_KEY",
+      authDomain: "TU_PROYECTO.firebaseapp.com",
+      databaseURL: "https://TU_PROYECTO-default-rtdb.firebaseio.com",
+      projectId: "TU_PROYECTO",
+      storageBucket: "TU_PROYECTO.appspot.com",
+      messagingSenderId: "",
+      appId: ""
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    const auth = getAuth(app);
+
+    // ====== Estado y defaults ======
+    const defaultTeams = Array.from({length:40}, (_,i)=>({
+      id: i+1,
+      name: `Equipo ${i+1}`,
+      points: 0, played: 0, win: 0, draw: 0, loss: 0
+    }));
+
+    let state = { teams: defaultTeams, history: [] };
+
+    // ====== Elementos ======
+    const $ = (s)=>document.querySelector(s);
+    const teamA = $('#teamA');
+    const teamB = $('#teamB');
+    const tbody = document.querySelector('#table tbody');
+    const historyBox = $('#history');
+    const btnAWin = $('#btnAWin');
+    const btnBWin = $('#btnBWin');
+    const btnDraw = $('#btnDraw');
+
+    // ====== Render ======
+    function renderSelects(){
+      const fill = (sel)=>{
+        sel.innerHTML = '';
+        state.teams.forEach(t=>{
+          const o = document.createElement('option');
+          o.value = t.id; o.textContent = t.name; sel.appendChild(o);
+        });
+      };
+      fill(teamA); fill(teamB);
+      teamA.selectedIndex = 0; teamB.selectedIndex = 1;
+    }
+
+    function renderTable(){
+      const sorted = [...state.teams].sort((a,b)=> b.points - a.points || a.name.localeCompare(b.name));
+      tbody.innerHTML = '';
+      sorted.forEach((t,idx)=>{
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td class="center">${idx+1}</td>
+          <td><button class="name-btn" data-id="${t.id}" title="Click para renombrar">${t.name}</button></td>
+          <td class="right">${t.points}</td>
+          <td class="center">${t.played}</td>
+          <td class="center">${t.win}</td>
+          <td class="center">${t.draw}</td>
+          <td class="center">${t.loss}</td>`;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function renderHistory(){
+      if(!state.history.length){ historyBox.innerHTML = '<span class="muted small">Sin resultados aún.</span>'; return; }
+      historyBox.innerHTML = state.history.slice().reverse().map(h=>{
+        const a = state.teams.find(t=>t.id===h.a)?.name || `#${h.a}`;
+        const b = state.teams.find(t=>t.id===h.b)?.name || `#${h.b}`;
+        const tag = h.type==='A' ? `Ganó ${a}` : h.type==='B' ? `Ganó ${b}` : 'Empate';
+        const when = new Date(h.ts).toLocaleString();
+        return `<div class="small">• ${when}: <strong>${a}</strong> vs <strong>${b}</strong> — <span class="muted">${tag}</span></div>`;
+      }).join('');
+    }
+
+    // ====== Firebase helpers ======
+    const DB_PATH = 'liga40';
+    const dbRef = ref(db, DB_PATH);
+
+    async function loadFromDB(){
+      const snap = await get(dbRef);
+      if(snap.exists()){
+        state = snap.val();
+      }else{
+        state = { teams: defaultTeams, history: [] };
+        await set(dbRef, state);
+      }
+      renderSelects(); renderTable(); renderHistory();
+    }
+
+    function subscribeRealtime(){
+      onValue(dbRef, (snap)=>{
+        const data = snap.val();
+        if(data){
+          state = data;
+          renderSelects();
+          renderTable();
+          renderHistory();
+          validateDifferent();
+        }
+      });
+    }
+
+    async function saveToDB(){
+      await set(dbRef, state);
+    }
+
+    // ====== Lógica de resultados ======
+    function applyResult(type){
+      const aId = parseInt(teamA.value,10);
+      const bId = parseInt(teamB.value,10);
+      if(aId===bId) return alert('Debes elegir equipos distintos');
+      const A = state.teams.find(t=>t.id===aId);
+      const B = state.teams.find(t=>t.id===bId);
+
+      A.played++; B.played++;
+      if(type==='A'){ A.points += 200; A.win++; B.loss++; }
+      else if(type==='B'){ B.points += 200; B.win++; A.loss++; }
+      else { A.points += 100; B.points += 100; A.draw++; B.draw++; }
+
+      state.history.push({ a:aId, b:bId, type, ts: Date.now() });
+      saveToDB();
+    }
+
+    // ====== Admin & auth ======
+    let isAdmin = false;
+
+    function updateAdminUI(){
+      $('#adminState').textContent = isAdmin ? 'Admin activo' : 'Visitante';
+      $('#adminState').className = isAdmin ? 'admin-badge' : 'tag';
+      validateDifferent();
+    }
+
+    $('#toggleAdmin').addEventListener('click', async ()=>{
+      if(isAdmin){ await signOut(auth); return; }
+      const email = prompt('Correo admin (Firebase Auth):');
+      const pass = prompt('Contraseña:');
+      if(!email || !pass) return;
+      try{
+        await signInWithEmailAndPassword(auth, email, pass);
+      }catch(e){ alert('No se pudo iniciar sesión: '+ e.message); }
+    });
+
+    onAuthStateChanged(auth, (user)=>{
+      isAdmin = !!user; // Si está logueado, es admin
+      updateAdminUI();
+    });
+
+    // ====== UI events ======
+    function validateDifferent(){
+      const a = parseInt(teamA.value,10);
+      const b = parseInt(teamB.value,10);
+      const ok = a !== b;
+      [btnAWin, btnBWin, btnDraw].forEach(btn=> btn.disabled = !(ok && isAdmin));
+    }
+
+    btnAWin.addEventListener('click', ()=>applyResult('A'));
+    btnBWin.addEventListener('click', ()=>applyResult('B'));
+    btnDraw.addEventListener('click', ()=>applyResult('D'));
+    teamA.addEventListener('change', validateDifferent);
+    teamB.addEventListener('change', validateDifferent);
+
+    // Renombrar equipos (clic en nombre)
+    tbody.addEventListener('click', (e)=>{
+      const btn = e.target.closest('.name-btn');
+      if(!btn) return;
+      if(!isAdmin) return alert('Solo admin puede renombrar');
+      const id = parseInt(btn.dataset.id,10);
+      const t = state.teams.find(x=>x.id===id);
+      const name = prompt('Nuevo nombre del equipo:', t.name);
+      if(!name) return;
+      t.name = name.trim().slice(0,40) || t.name;
+      saveToDB();
+    });
+
+    // Renombrar en masa
+    $('#renameTeams').addEventListener('click', ()=>{
+      if(!isAdmin) return alert('Solo admin');
+      const list = state.teams.map(t=>t.name).join('
+');
+      const edited = prompt('Edita los nombres (40 líneas):', list);
+      if(!edited) return;
+      const names = edited.split('
+').map(s=>s.trim());
+      if(names.length!==40){ alert('Deben ser 40 líneas'); return; }
+      state.teams.forEach((t,i)=> t.name = names[i] || t.name);
+      saveToDB();
+    });
+
+    // Reiniciar
+    $('#resetBtn').addEventListener('click', ()=>{
+      if(!isAdmin) return alert('Solo admin');
+      if(!confirm('¿Seguro que quieres reiniciar?')) return;
+      state = { teams: defaultTeams.map(t=>({...t})), history: [] };
+      saveToDB();
+    });
+
+    // ====== Init ======
+    await loadFromDB();
+    subscribeRealtime();
+    validateDifferent();
+  </script>
+</body>
+</html>
