@@ -26,7 +26,6 @@
     .ghost{background:transparent;border:1px solid #334155}
     .danger{background:var(--danger)}
     .grid{display:grid;gap:10px}
-    .cols-3{grid-template-columns:1fr 1fr 1fr}
     .cols-2{grid-template-columns:1fr 1fr}
     .muted{color:var(--muted)}
     table{width:100%;border-collapse:collapse}
@@ -109,21 +108,21 @@
     </section>
   </main>
 
-  <!-- Firebase v10 modules -->
+  <!-- Firebase v10 (módulos desde CDN) -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
     import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
     import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
-    // TODO: Rellena con tu configuración de Firebase
+    // --- Config de TU proyecto ---
     const firebaseConfig = {
-      apiKey: "TU_API_KEY",
-      authDomain: "TU_PROYECTO.firebaseapp.com",
-      databaseURL: "https://TU_PROYECTO-default-rtdb.firebaseio.com",
-      projectId: "TU_PROYECTO",
-      storageBucket: "TU_PROYECTO.appspot.com",
-      messagingSenderId: "",
-      appId: ""
+      apiKey: "AIzaSyCwRJd9bZfp7bjfZgPKvVhO0NFKZt23T2I",
+      authDomain: "hunger-games-tec-slp.firebaseapp.com",
+      databaseURL: "https://hunger-games-tec-slp-default-rtdb.firebaseio.com",
+      projectId: "hunger-games-tec-slp",
+      storageBucket: "hunger-games-tec-slp.firebasestorage.app",
+      messagingSenderId: "380799956916",
+      appId: "1:380799956916:web:b5d40e3c2da2118ab5a4e1"
     };
 
     const app = initializeApp(firebaseConfig);
@@ -136,7 +135,6 @@
       name: `Equipo ${i+1}`,
       points: 0, played: 0, win: 0, draw: 0, loss: 0
     }));
-
     let state = { teams: defaultTeams, history: [] };
 
     // ====== Elementos ======
@@ -219,7 +217,12 @@
     }
 
     async function saveToDB(){
-      await set(dbRef, state);
+      try {
+        await set(dbRef, state);
+      } catch (e) {
+        console.error(e);
+        alert('No se pudo guardar (revisa reglas o si estás logueado).');
+      }
     }
 
     // ====== Lógica de resultados ======
@@ -291,21 +294,19 @@
     });
 
     // Renombrar en masa
-    $('#renameTeams').addEventListener('click', ()=>{
+    document.getElementById('renameTeams').addEventListener('click', ()=>{
       if(!isAdmin) return alert('Solo admin');
-      const list = state.teams.map(t=>t.name).join('
-');
+      const list = state.teams.map(t=>t.name).join('\n');
       const edited = prompt('Edita los nombres (40 líneas):', list);
       if(!edited) return;
-      const names = edited.split('
-').map(s=>s.trim());
+      const names = edited.split('\n').map(s=>s.trim());
       if(names.length!==40){ alert('Deben ser 40 líneas'); return; }
       state.teams.forEach((t,i)=> t.name = names[i] || t.name);
       saveToDB();
     });
 
     // Reiniciar
-    $('#resetBtn').addEventListener('click', ()=>{
+    document.getElementById('resetBtn').addEventListener('click', ()=>{
       if(!isAdmin) return alert('Solo admin');
       if(!confirm('¿Seguro que quieres reiniciar?')) return;
       state = { teams: defaultTeams.map(t=>({...t})), history: [] };
@@ -313,9 +314,13 @@
     });
 
     // ====== Init ======
-    await loadFromDB();
-    subscribeRealtime();
-    validateDifferent();
+    async function init(){
+      renderSelects(); renderTable(); renderHistory(); updateAdminUI();
+      await loadFromDB();
+      subscribeRealtime();
+      validateDifferent();
+    }
+    init();
   </script>
 </body>
 </html>
