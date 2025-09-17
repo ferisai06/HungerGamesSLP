@@ -55,7 +55,6 @@
   </header>
 
   <main>
-    <!-- Panel de partido -->
     <section class="card">
       <div class="body">
         <h2>Registrar resultado</h2>
@@ -79,7 +78,6 @@
       </div>
     </section>
 
-    <!-- Tabla de posiciones -->
     <section class="card">
       <div class="body">
         <div class="row" style="justify-content:space-between;align-items:center">
@@ -108,13 +106,12 @@
     </section>
   </main>
 
-  <!-- Firebase v10 (módulos desde CDN) -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
     import { getDatabase, ref, set, get, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
     import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
-    // --- Config de TU proyecto ---
+    // Config de TU proyecto
     const firebaseConfig = {
       apiKey: "AIzaSyCwRJd9bZfp7bjfZgPKvVhO0NFKZt23T2I",
       authDomain: "hunger-games-tec-slp.firebaseapp.com",
@@ -136,6 +133,20 @@
       points: 0, played: 0, win: 0, draw: 0, loss: 0
     }));
     let state = { teams: defaultTeams, history: [] };
+
+    // --- Normalizador/migrador de estado (clave para evitar 'history undefined') ---
+    function normalizeState(data){
+      const base = { teams: defaultTeams.map(t=>({...t})), history: [] };
+      if(!data || typeof data !== 'object') return base;
+
+      const teams = Array.isArray(data.teams) && data.teams.length === 40
+        ? data.teams.map((t,i)=>({ ...defaultTeams[i], ...t }))
+        : base.teams;
+
+      const history = Array.isArray(data.history) ? data.history : [];
+
+      return { teams, history };
+    }
 
     // ====== Elementos ======
     const $ = (s)=>document.querySelector(s);
@@ -195,9 +206,9 @@
     async function loadFromDB(){
       const snap = await get(dbRef);
       if(snap.exists()){
-        state = snap.val();
+        state = normalizeState(snap.val());
       }else{
-        state = { teams: defaultTeams, history: [] };
+        state = normalizeState(null);
         await set(dbRef, state);
       }
       renderSelects(); renderTable(); renderHistory();
@@ -207,7 +218,7 @@
       onValue(dbRef, (snap)=>{
         const data = snap.val();
         if(data){
-          state = data;
+          state = normalizeState(data);
           renderSelects();
           renderTable();
           renderHistory();
@@ -217,12 +228,7 @@
     }
 
     async function saveToDB(){
-      try {
-        await set(dbRef, state);
-      } catch (e) {
-        console.error(e);
-        alert('No se pudo guardar (revisa reglas o si estás logueado).');
-      }
+      await set(dbRef, state);
     }
 
     // ====== Lógica de resultados ======
@@ -238,7 +244,10 @@
       else if(type==='B'){ B.points += 200; B.win++; A.loss++; }
       else { A.points += 100; B.points += 100; A.draw++; B.draw++; }
 
+      // --- Seguro por si history no existe en una BD vieja ---
+      if(!Array.isArray(state.history)) state.history = [];
       state.history.push({ a:aId, b:bId, type, ts: Date.now() });
+
       saveToDB();
     }
 
@@ -262,7 +271,7 @@
     });
 
     onAuthStateChanged(auth, (user)=>{
-      isAdmin = !!user; // Si está logueado, es admin
+      isAdmin = !!user;
       updateAdminUI();
     });
 
@@ -280,7 +289,7 @@
     teamA.addEventListener('change', validateDifferent);
     teamB.addEventListener('change', validateDifferent);
 
-    // Renombrar equipos (clic en nombre)
+    // Renombrar equipos
     tbody.addEventListener('click', (e)=>{
       const btn = e.target.closest('.name-btn');
       if(!btn) return;
@@ -324,4 +333,3 @@
   </script>
 </body>
 </html>
-databaseURL: "https://hunger-games-tec-slp-default-rtdb.firebaseio.com"
